@@ -1,5 +1,5 @@
-#ifndef SET_H
-#define SET_H
+#ifndef REUSABLE_SET_H_ARBKSBJSEKASFJSEBJBNS42892
+#define REUSABLE_SET_H_ARBKSBJSEKASFJSEBJBNS42892
 
 #include <stdlib.h>
 #include <stdbool.h>

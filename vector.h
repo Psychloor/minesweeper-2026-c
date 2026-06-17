@@ -1,5 +1,5 @@
-#ifndef VECTOR_H
-#define VECTOR_H
+#ifndef REUSABLE_VECTOR_H_WKANABKAAEKBKAREK49284SBSBS
+#define REUSABLE_VECTOR_H_WKANABKAAEKBKAREK49284SBSBS
 
 #include <stdlib.h>
 #include <stdbool.h>
