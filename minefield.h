@@ -27,6 +27,6 @@ void minefieldOpenTile(Minefield *minefield, int xPos, int yPos);
 
 void minefieldToggleFlag(const Minefield *minefield, int xPos, int yPos);
 
-TileType MinefieldGetTileType(const Minefield *minefield, int xPos, int yPos);
+TileType minefieldGetTileType(const Minefield *minefield, int xPos, int yPos);
 
 #endif //MINESWEEPER_C_MINEFIELD_H

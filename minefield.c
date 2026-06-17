@@ -37,7 +37,7 @@ static bool int_equals(const int a, const int b) {
 
 SET_DEFINE(int, IntSet, int_hash, int_equals);
 
-void place_mines(const Minefield *minefield, const int firstX, const int firstY) {
+void placeMines(const Minefield *minefield, const int firstX, const int firstY) {
     srand(time(NULL));
 
     size_t minesToPlace = minefield->numMines;
@@ -46,12 +46,12 @@ void place_mines(const Minefield *minefield, const int firstX, const int firstY)
         const int x = (int) randomIndex % minefield->width;
         const int y = (int) randomIndex / minefield->width;
 
-        if (x != firstX || y != firstY) {
-            Tile *tile = &minefield->tiles[randomIndex];
-            if (!tile->isMine) {
-                tile->isMine = true;
-                --minesToPlace;
-            }
+        if (x == firstX && y == firstY)
+            continue;
+
+        if (!minefield->tiles[randomIndex].isMine) {
+            minefield->tiles[randomIndex].isMine = true;
+            --minesToPlace;
         }
     }
 }
@@ -157,12 +157,12 @@ bool minefieldCreate(Minefield *minefield, const int width, const int height, co
     minefield->explosionPos = (SDL_Point){-1, -1};
 
     minefield->tiles = (Tile *) calloc(width * height, sizeof(Tile));
-    memset(minefield->tiles, 0, width * height * sizeof(Tile));
     if (!minefield->tiles) {
         free(minefield->tiles);
         return false;
     }
 
+    memset(minefield->tiles, 0, width * height * sizeof(Tile));
     return true;
 }
 
@@ -177,7 +177,7 @@ void minefieldOpenTile(Minefield *minefield, const int xPos, const int yPos) {
     if (minefield->isGameWon) return;
 
     if (minefield->firstOpen) {
-        place_mines(minefield, xPos, yPos);
+        placeMines(minefield, xPos, yPos);
         countAdjacentMines(minefield);
         minefield->firstOpen = false;
     }
@@ -216,7 +216,7 @@ void minefieldToggleFlag(const Minefield *minefield, const int xPos, const int y
     }
 }
 
-TileType MinefieldGetTileType(const Minefield *minefield, int xPos, int yPos) {
+TileType minefieldGetTileType(const Minefield *minefield, int xPos, int yPos) {
     const Tile *tile = &minefield->tiles[yPos * minefield->width + xPos];
     if (tile->isOpen) {
         if (tile->isMine) {
