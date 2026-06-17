@@ -43,8 +43,8 @@ void updateTileSourcePositions(const AppContext *context) {
             const TileType tileType = minefieldGetTileType(&context->minefield, x, y);
             const int tileX = tileType % 4;
             const int tileY = tileType / 4;
-            context->tileSrcRects[i].x = (float)tileX * TILE_TEX_SIZE;
-            context->tileSrcRects[i].y = (float)tileY * TILE_TEX_SIZE;
+            context->tileSrcRects[i].x = (float) tileX * TILE_TEX_SIZE;
+            context->tileSrcRects[i].y = (float) tileY * TILE_TEX_SIZE;
         }
     }
 }
@@ -58,14 +58,14 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char **argv) {
     const Settings settings = settingsLoad("settings.ini", (Settings){
                                                .width = 20,
                                                .height = 20,
-                                               .mines = 30
+                                               .mines = 40
                                            });
 
     startingWidth = settings.width;
     startingHeight = settings.height;
     startingMines = settings.mines;
 
-    AppContext *context = (AppContext *) malloc(sizeof(AppContext));
+    AppContext *context = malloc(sizeof(AppContext));
     if (!context) {
         SDL_Log("Failed to initialize App Context");
         return SDL_APP_FAILURE;
@@ -121,10 +121,10 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char **argv) {
         const int x = i % startingWidth;
         const int y = i / startingWidth;
 
-        context->tileDstRects[i].x = (float)(x * TILE_SIZE);
-        context->tileDstRects[i].y = (float)(y * TILE_SIZE);
-        context->tileDstRects[i].w = (float)TILE_SIZE;
-        context->tileDstRects[i].h = (float)TILE_SIZE;
+        context->tileDstRects[i].x = (float) (x * TILE_SIZE);
+        context->tileDstRects[i].y = (float) (y * TILE_SIZE);
+        context->tileDstRects[i].w = (float) TILE_SIZE;
+        context->tileDstRects[i].h = (float) TILE_SIZE;
 
         context->tileSrcRects[i].w = TILE_TEX_SIZE;
         context->tileSrcRects[i].h = TILE_TEX_SIZE;
@@ -169,8 +169,7 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event) {
                     return SDL_APP_CONTINUE;
                 }
 
-                minefieldDestroy(&context->minefield);
-                minefieldCreate(&context->minefield, startingWidth, startingHeight, startingMines);
+                minefieldReset(&context->minefield, startingWidth, startingHeight, startingMines);
                 SDL_SetWindowTitle(context->window, kTitle);
                 updateTileSourcePositions(context);
             }
@@ -200,17 +199,18 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event) {
 }
 
 void SDL_AppQuit(void *appstate, SDL_AppResult result) {
-    AppContext *context = (AppContext *) appstate;
+    AppContext *context = appstate;
 
-    free(context->tileSrcRects);
-    free(context->tileDstRects);
-    minefieldDestroy(&context->minefield);
-    SDL_DestroySurface(context->iconSurface);
-    SDL_DestroyTexture(context->tileTexture);
-    SDL_DestroyRenderer(context->renderer);
-    SDL_DestroyWindow(context->window);
-
-    free(context);
+    if (context != NULL) {
+        free(context->tileSrcRects);
+        free(context->tileDstRects);
+        minefieldDestroy(&context->minefield);
+        SDL_DestroySurface(context->iconSurface);
+        SDL_DestroyTexture(context->tileTexture);
+        SDL_DestroyRenderer(context->renderer);
+        SDL_DestroyWindow(context->window);
+        free(context);
+    }
 
     SDL_Quit();
 }
