@@ -14,17 +14,6 @@
 #include "SDL3/SDL_log.h"
 #include "SDL3/SDL_rect.h"
 
-// struct Minefield {
-//     int width_;
-//     int height_;
-//     int numMines_;
-//     bool firstOpen_;
-//     bool isGameOver_;
-//     bool isGameWon_;
-//     Tile *tiles_;
-//     SDL_Point explosionPos_;
-// };
-
 VECTOR_DEFINE(SDL_Point, PointVector);
 
 static uint32_t int_hash(const int value) {
