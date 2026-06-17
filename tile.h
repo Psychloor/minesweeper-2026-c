@@ -6,7 +6,6 @@
 #define MINESWEEPER_C_CELL_H
 #include <stdbool.h>
 #include <stdint.h>
-#include <stdlib.h>
 
 typedef struct Tile {
     bool isOpen: 1;
