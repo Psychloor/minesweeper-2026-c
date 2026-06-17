@@ -26,16 +26,19 @@ static bool int_equals(const int a, const int b) {
 
 SET_DEFINE(int, IntSet, int_hash, int_equals);
 
+bool isInsideRange(const Minefield *minefield, const int xPos, const int yPos) {
+    return xPos >= 0 && xPos < minefield->width && yPos >= 0 && yPos < minefield->height;
+}
+
 void placeMines(const Minefield *minefield, const int firstX, const int firstY) {
     srand(time(NULL));
 
     size_t minesToPlace = minefield->numMines;
+    const int firstIndex = firstY * minefield->width + firstX;
     while (minesToPlace > 0) {
-        const size_t randomIndex = rand() % (minefield->width * minefield->height);
-        const int x = (int) randomIndex % minefield->width;
-        const int y = (int) randomIndex / minefield->width;
+        const size_t randomIndex = rand() % minefield->tileCount;
 
-        if (x == firstX && y == firstY)
+        if (randomIndex == firstIndex)
             continue;
 
         if (!minefield->tiles[randomIndex].isMine) {
@@ -45,14 +48,17 @@ void placeMines(const Minefield *minefield, const int firstX, const int firstY) 
     }
 }
 
-uint8_t minesNearTile(const Minefield *minefield, const int xPos, const int yPos) {
+uint8_t inline minesNearTile(const Minefield *minefield, const int xPos, const int yPos) {
+    if (minefield->tiles[yPos * minefield->width + xPos].isMine)
+        return 0;
+
     uint8_t mines = 0;
     for (int y = yPos - 1; y <= yPos + 1; ++y) {
         for (int x = xPos - 1; x <= xPos + 1; ++x) {
             if (x == xPos && y == yPos)
                 continue;
 
-            if (x >= 0 && x < minefield->width && y >= 0 && y < minefield->height) {
+            if (isInsideRange(minefield, x, y)) {
                 if (minefield->tiles[y * minefield->width + x].isMine) {
                     ++mines;
                 }
@@ -63,20 +69,20 @@ uint8_t minesNearTile(const Minefield *minefield, const int xPos, const int yPos
 }
 
 void countAdjacentMines(const Minefield *minefield) {
-    for (int i = 0; i < minefield->width * minefield->height; ++i) {
+    for (int i = 0; i < minefield->tileCount; ++i) {
         minefield->tiles[i].adjacentMines = minesNearTile(minefield, i % minefield->width, i / minefield->width);
     }
 }
 
 void openNearbyTiles(const Minefield *minefield, const int xPos, const int yPos) {
     PointVector tilesToOpen;
-    if (!PointVector_create(&tilesToOpen, (minefield->width * minefield->height) >> 2)) {
+    if (!PointVector_create(&tilesToOpen, (minefield->tileCount) >> 2)) {
         SDL_Log("Failed to allocate memory for tilesToOpen");
         return;
     }
 
     IntSet visitedTiles;
-    if (!IntSet_create(&visitedTiles, (minefield->width * minefield->height) >> 2)) {
+    if (!IntSet_create(&visitedTiles, (minefield->tileCount) >> 2)) {
         SDL_Log("Failed to allocate memory for visitedTiles");
         PointVector_destroy(&tilesToOpen);
         return;
@@ -100,8 +106,7 @@ void openNearbyTiles(const Minefield *minefield, const int xPos, const int yPos)
                 if (x == 0 && y == 0) continue;
                 const int neighbourX = tilePos.x + x;
                 const int neighbourY = tilePos.y + y;
-                if (neighbourX < 0 || neighbourX >= minefield->width || neighbourY < 0 || neighbourY >= minefield->
-                    height)
+                if (!isInsideRange(minefield, neighbourX, neighbourY))
                     continue;
                 if (IntSet_contains(&visitedTiles, neighbourY * minefield->width + neighbourX)) continue;
 
@@ -116,7 +121,7 @@ void openNearbyTiles(const Minefield *minefield, const int xPos, const int yPos)
 }
 
 void openAllMines(const Minefield *minefield) {
-    for (int i = 0; i < minefield->width * minefield->height; ++i) {
+    for (int i = 0; i < minefield->tileCount; ++i) {
         if (minefield->tiles[i].isMine && !minefield->tiles[i].isFlagged) {
             minefield->tiles[i].isOpen = true;
         }
@@ -124,7 +129,7 @@ void openAllMines(const Minefield *minefield) {
 }
 
 void checkWinCondition(Minefield *minefield) {
-    for (int i = 0; i < minefield->width * minefield->height; ++i) {
+    for (int i = 0; i < minefield->tileCount; ++i) {
         const Tile *tile = &minefield->tiles[i];
         if (!tile->isMine && !tile->isOpen) {
             return;
@@ -136,32 +141,66 @@ void checkWinCondition(Minefield *minefield) {
 }
 
 bool minefieldCreate(Minefield *minefield, const int width, const int height, const int numMines) {
-    memset(minefield, 0, sizeof(Minefield));
-    minefield->height = height;
-    minefield->width = width;
-    minefield->numMines = SDL_clamp(numMines, 1, (width * height) >> 1);
-    minefield->firstOpen = true;
-    minefield->isGameOver = false;
-    minefield->isGameWon = false;
-    minefield->explosionPos = (SDL_Point){-1, -1};
-
-    minefield->tiles = (Tile *) calloc(width * height, sizeof(Tile));
-    if (!minefield->tiles) {
-        free(minefield->tiles);
+    assert(minefield != NULL && "Minefield cannot be null");
+    if (!minefield) {
         return false;
     }
 
-    memset(minefield->tiles, 0, width * height * sizeof(Tile));
+    minefield->tileCount = 0;
+    minefield->tiles = NULL;
+    return minefieldReset(minefield, width, height, numMines);
+}
+
+bool minefieldReset(Minefield *minefield, const int width, const int height, const int numMines) {
+    assert(minefield != NULL && "Minefield cannot be null");
+    assert(width > 1 && "Width must be greater than 1");
+    assert(height > 1 && "Height must be greater than 1");
+    assert(numMines > 0 && "Number of mines must be greater than 0");
+
+    if (!minefield) {
+        return false;
+    }
+
+    if (width < 2 || height < 2 || numMines < 1) {
+        return false;
+    }
+
+    const int tileCount = width * height;
+
+    if (tileCount != minefield->tileCount) {
+        Tile *newTiles = realloc(minefield->tiles, tileCount * sizeof(Tile));
+        if (!newTiles) {
+            return false;
+        }
+        minefield->tiles = newTiles;
+    }
+
+    Tile *tiles = minefield->tiles;
+    memset(minefield, 0, sizeof(Minefield));
+
+    minefield->tiles = tiles;
+    minefield->tileCount = tileCount;
+    minefield->width = width;
+    minefield->height = height;
+    minefield->numMines = SDL_clamp(numMines, 1, tileCount >> 1);
+    minefield->firstOpen = true;
+    minefield->explosionPos = (SDL_Point){-1, -1};
+
+    memset(minefield->tiles, 0, tileCount * sizeof(Tile));
+
     return true;
 }
 
 void minefieldDestroy(const Minefield *minefield) {
-    if (minefield && minefield->tiles) {
+    if (minefield != NULL && minefield->tiles != NULL) {
         free(minefield->tiles);
     }
 }
 
 void minefieldOpenTile(Minefield *minefield, const int xPos, const int yPos) {
+    assert(minefield != NULL && "Minefield cannot be null");
+    assert(xPos >= 0 && xPos < minefield->width && "X position is out of range");
+    assert(yPos >= 0 && yPos < minefield->height && "Y position is out of range");
     if (minefield->isGameOver) return;
     if (minefield->isGameWon) return;
 
@@ -188,6 +227,10 @@ void minefieldOpenTile(Minefield *minefield, const int xPos, const int yPos) {
 }
 
 void minefieldToggleFlag(const Minefield *minefield, const int xPos, const int yPos) {
+    assert(minefield != NULL && "Minefield cannot be null");
+    assert(xPos >= 0 && xPos < minefield->width && "X position is out of range");
+    assert(yPos >= 0 && yPos < minefield->height && "Y position is out of range");
+
     if (minefield->isGameOver || minefield->isGameWon)
         return;
 
@@ -205,7 +248,11 @@ void minefieldToggleFlag(const Minefield *minefield, const int xPos, const int y
     }
 }
 
-TileType minefieldGetTileType(const Minefield *minefield, int xPos, int yPos) {
+TileType minefieldGetTileType(const Minefield *minefield, const int xPos, const int yPos) {
+    assert(minefield != NULL && "Minefield cannot be null");
+    assert(xPos >= 0 && xPos < minefield->width && "X position is out of range");
+    assert(yPos >= 0 && yPos < minefield->height && "Y position is out of range");
+
     const Tile *tile = &minefield->tiles[yPos * minefield->width + xPos];
     if (tile->isOpen) {
         if (tile->isMine) {
@@ -245,23 +292,37 @@ TileType minefieldGetTileType(const Minefield *minefield, int xPos, int yPos) {
     return TILE_TYPE_CLOSED;
 }
 
+bool minefieldWithinField(const Minefield *minefield, const int xPos, const int yPos) {
+    assert(minefield != NULL && "Minefield cannot be null");
+
+    return xPos >= 0 && xPos < minefield->width && yPos >= 0 && yPos < minefield->height;
+}
+
 const Tile *minefieldGetTile(const Minefield *minefield, const int xPos, const int yPos) {
+    assert(minefield != NULL && "Minefield cannot be null");
+    assert(xPos >= 0 && xPos < minefield->width && "X position is out of range");
+    assert(yPos >= 0 && yPos < minefield->height && "Y position is out of range");
+
     return &minefield->tiles[yPos * minefield->width + xPos];
 }
 
 const Tile *minefieldGetTileFromIndex(const Minefield *minefield, const int index) {
-    assert(index >= 0 && index < minefield->width * minefield->height);
+    assert(minefield != NULL && "Minefield cannot be null");
+    assert(index >= 0 && index < minefield->tileCount);
     return &minefield->tiles[index];
 }
 
 bool minefieldIsGameOver(const Minefield *minefield) {
+    assert(minefield != NULL && "Minefield cannot be null");
     return minefield->isGameOver;
 }
 
 bool minefieldIsWin(const Minefield *minefield) {
+    assert(minefield != NULL && "Minefield cannot be null");
     return minefield->isGameWon;
 }
 
 SDL_Point minefieldGetExplosionPoint(const Minefield *minefield) {
+    assert(minefield != NULL && "Minefield cannot be null");
     return minefield->explosionPos;
 }
