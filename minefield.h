@@ -15,7 +15,8 @@ typedef struct MS_Point {
 typedef enum MinesweeperState {
     MINESWEEPER_STATE_PLAYING,
     MINESWEEPER_STATE_LOST,
-    MINESWEEPER_STATE_WON
+    MINESWEEPER_STATE_WON,
+    MINESWEEPER_STATE_ALLOC_ERROR
 } MinesweeperState;
 
 typedef struct Minefield {

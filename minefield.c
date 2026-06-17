@@ -75,16 +75,16 @@ void countAdjacentMines(const Minefield *minefield) {
     }
 }
 
-void openNearbyTiles(const Minefield *minefield, const int xPos, const int yPos) {
+bool openNearbyTiles(const Minefield *minefield, const int xPos, const int yPos) {
     PointVector tilesToOpen;
     if (!PointVector_create(&tilesToOpen, (minefield->tileCount) >> 2)) {
-        return;
+        return false;
     }
 
     IntSet visitedTiles;
     if (!IntSet_create(&visitedTiles, (minefield->tileCount) >> 2)) {
         PointVector_destroy(&tilesToOpen);
-        return;
+        return false;
     }
 
     PointVector_push(&tilesToOpen, (MS_Point){xPos, yPos});
@@ -117,6 +117,8 @@ void openNearbyTiles(const Minefield *minefield, const int xPos, const int yPos)
 
     PointVector_destroy(&tilesToOpen);
     IntSet_destroy(&visitedTiles);
+
+    return true;
 }
 
 void openAllMines(const Minefield *minefield) {
@@ -220,7 +222,9 @@ MinesweeperState minefieldOpenTile(Minefield *minefield, const int xPos, const i
         openAllMines(minefield);
         minefield->state = MINESWEEPER_STATE_LOST;
     } else {
-        openNearbyTiles(minefield, xPos, yPos);
+        if (!openNearbyTiles(minefield, xPos, yPos)) {
+            return MINESWEEPER_STATE_ALLOC_ERROR;
+        }
         checkWinCondition(minefield);
     }
 
