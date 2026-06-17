@@ -165,7 +165,7 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event) {
 
         case SDL_EVENT_KEY_DOWN:
             if (event->key.key == SDLK_SPACE) {
-                if (!context->minefield.isGameOver && !context->minefield.isGameWon) {
+                if (context->minefield.state == MINESWEEPER_STATE_PLAYING) {
                     return SDL_APP_CONTINUE;
                 }
 
@@ -177,10 +177,10 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event) {
 
         case SDL_EVENT_MOUSE_BUTTON_DOWN:
             if (event->button.button == SDL_BUTTON_LEFT) {
-                minefieldOpenTile(&context->minefield, context->mousePos.x, context->mousePos.y);
-                if (context->minefield.isGameOver) {
+                const MinesweeperState newState = minefieldOpenTile(&context->minefield, context->mousePos.x, context->mousePos.y);
+                if (newState == MINESWEEPER_STATE_LOST) {
                     SDL_SetWindowTitle(context->window, kTitleGameOver);
-                } else if (context->minefield.isGameWon) {
+                } else if (newState == MINESWEEPER_STATE_WON) {
                     SDL_SetWindowTitle(context->window, kTitleGameWon);
                 }
                 updateTileSourcePositions(context);

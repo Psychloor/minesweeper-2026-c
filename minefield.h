@@ -6,7 +6,17 @@
 #define MINESWEEPER_C_MINEFIELD_H
 
 #include "tile.h"
-#include "SDL3/SDL_rect.h"
+
+typedef struct MS_Point {
+    int x;
+    int y;
+} MS_Point;
+
+typedef enum MinesweeperState {
+    MINESWEEPER_STATE_PLAYING,
+    MINESWEEPER_STATE_LOST,
+    MINESWEEPER_STATE_WON
+} MinesweeperState;
 
 typedef struct Minefield {
     int tileCount;
@@ -14,10 +24,9 @@ typedef struct Minefield {
     int height;
     int numMines;
     bool firstOpen;
-    bool isGameOver;
-    bool isGameWon;
     Tile *tiles;
-    SDL_Point explosionPos;
+    MS_Point explosionPos;
+    MinesweeperState state;
 } Minefield;
 
 bool minefieldCreate(Minefield *minefield, int width, int height, int numMines);
@@ -26,7 +35,7 @@ bool minefieldReset(Minefield *minefield, int width, int height, int numMines);
 
 void minefieldDestroy(const Minefield *minefield);
 
-void minefieldOpenTile(Minefield *minefield, int xPos, int yPos);
+MinesweeperState minefieldOpenTile(Minefield *minefield, int xPos, int yPos);
 
 void minefieldToggleFlag(const Minefield *minefield, int xPos, int yPos);
 

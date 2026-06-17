@@ -11,10 +11,7 @@
 #include <stdlib.h>
 #include <time.h>
 
-#include "SDL3/SDL_log.h"
-#include "SDL3/SDL_rect.h"
-
-VECTOR_DEFINE(SDL_Point, PointVector);
+VECTOR_DEFINE(MS_Point, PointVector);
 
 static uint32_t int_hash(const int value) {
     return (uint32_t) value * 2654435761u;
@@ -28,6 +25,10 @@ SET_DEFINE(int, IntSet, int_hash, int_equals);
 
 bool isInsideRange(const Minefield *minefield, const int xPos, const int yPos) {
     return xPos >= 0 && xPos < minefield->width && yPos >= 0 && yPos < minefield->height;
+}
+
+int mf_clamp(const int value, const int min, const int max) {
+    return value < min ? min : value > max ? max : value;
 }
 
 void placeMines(const Minefield *minefield, const int firstX, const int firstY) {
@@ -77,22 +78,20 @@ void countAdjacentMines(const Minefield *minefield) {
 void openNearbyTiles(const Minefield *minefield, const int xPos, const int yPos) {
     PointVector tilesToOpen;
     if (!PointVector_create(&tilesToOpen, (minefield->tileCount) >> 2)) {
-        SDL_Log("Failed to allocate memory for tilesToOpen");
         return;
     }
 
     IntSet visitedTiles;
     if (!IntSet_create(&visitedTiles, (minefield->tileCount) >> 2)) {
-        SDL_Log("Failed to allocate memory for visitedTiles");
         PointVector_destroy(&tilesToOpen);
         return;
     }
 
-    PointVector_push(&tilesToOpen, (SDL_Point){xPos, yPos});
+    PointVector_push(&tilesToOpen, (MS_Point){xPos, yPos});
     IntSet_insert(&visitedTiles, yPos * minefield->width + xPos);
 
     while (!PointVector_is_empty(&tilesToOpen)) {
-        SDL_Point tilePos;
+        MS_Point tilePos;
         PointVector_pop(&tilesToOpen, &tilePos);
 
         Tile *currentTile = &minefield->tiles[tilePos.y * minefield->width + tilePos.x];
@@ -110,7 +109,7 @@ void openNearbyTiles(const Minefield *minefield, const int xPos, const int yPos)
                     continue;
                 if (IntSet_contains(&visitedTiles, neighbourY * minefield->width + neighbourX)) continue;
 
-                PointVector_push(&tilesToOpen, (SDL_Point){neighbourX, neighbourY});
+                PointVector_push(&tilesToOpen, (MS_Point){neighbourX, neighbourY});
                 IntSet_insert(&visitedTiles, neighbourY * minefield->width + neighbourX);
             }
         }
@@ -137,7 +136,7 @@ void checkWinCondition(Minefield *minefield) {
     }
 
     openAllMines(minefield);
-    minefield->isGameWon = true;
+    minefield->state = MINESWEEPER_STATE_WON;
 }
 
 bool minefieldCreate(Minefield *minefield, const int width, const int height, const int numMines) {
@@ -182,9 +181,10 @@ bool minefieldReset(Minefield *minefield, const int width, const int height, con
     minefield->tileCount = tileCount;
     minefield->width = width;
     minefield->height = height;
-    minefield->numMines = SDL_clamp(numMines, 1, tileCount >> 1);
+    minefield->numMines = mf_clamp(numMines, 1, tileCount >> 1);
     minefield->firstOpen = true;
-    minefield->explosionPos = (SDL_Point){-1, -1};
+    minefield->explosionPos = (MS_Point){-1, -1};
+    minefield->state = MINESWEEPER_STATE_PLAYING;
 
     memset(minefield->tiles, 0, tileCount * sizeof(Tile));
 
@@ -197,12 +197,11 @@ void minefieldDestroy(const Minefield *minefield) {
     }
 }
 
-void minefieldOpenTile(Minefield *minefield, const int xPos, const int yPos) {
+MinesweeperState minefieldOpenTile(Minefield *minefield, const int xPos, const int yPos) {
     assert(minefield != NULL && "Minefield cannot be null");
     assert(xPos >= 0 && xPos < minefield->width && "X position is out of range");
     assert(yPos >= 0 && yPos < minefield->height && "Y position is out of range");
-    if (minefield->isGameOver) return;
-    if (minefield->isGameWon) return;
+    if (minefield->state != MINESWEEPER_STATE_PLAYING) return minefield->state;
 
     if (minefield->firstOpen) {
         placeMines(minefield, xPos, yPos);
@@ -211,19 +210,21 @@ void minefieldOpenTile(Minefield *minefield, const int xPos, const int yPos) {
     }
 
     Tile *tile = &minefield->tiles[yPos * minefield->width + xPos];
-    if (tile->isFlagged || tile->isOpen) return;
+    if (tile->isFlagged || tile->isOpen) return minefield->state;
 
     if (tile->isMine) {
-        minefield->isGameOver = true;
         tile->isOpen = true;
         tile->isQuestionMarked = false;
         minefield->explosionPos.x = xPos;
         minefield->explosionPos.y = yPos;
         openAllMines(minefield);
+        minefield->state = MINESWEEPER_STATE_LOST;
     } else {
         openNearbyTiles(minefield, xPos, yPos);
         checkWinCondition(minefield);
     }
+
+    return minefield->state;
 }
 
 void minefieldToggleFlag(const Minefield *minefield, const int xPos, const int yPos) {
@@ -231,7 +232,7 @@ void minefieldToggleFlag(const Minefield *minefield, const int xPos, const int y
     assert(xPos >= 0 && xPos < minefield->width && "X position is out of range");
     assert(yPos >= 0 && yPos < minefield->height && "Y position is out of range");
 
-    if (minefield->isGameOver || minefield->isGameWon)
+    if (minefield->state != MINESWEEPER_STATE_PLAYING)
         return;
 
     Tile *tile = &minefield->tiles[yPos * minefield->width + xPos];
@@ -280,7 +281,7 @@ TileType minefieldGetTileType(const Minefield *minefield, const int xPos, const 
         return TILE_TYPE_OPEN;
     }
     if (tile->isFlagged) {
-        if (minefield->isGameOver && !tile->isMine) {
+        if (minefield->state == MINESWEEPER_STATE_LOST && !tile->isMine) {
             return TILE_TYPE_FALSE_MINE;
         }
         return TILE_TYPE_FLAGGED;
@@ -314,15 +315,15 @@ const Tile *minefieldGetTileFromIndex(const Minefield *minefield, const int inde
 
 bool minefieldIsGameOver(const Minefield *minefield) {
     assert(minefield != NULL && "Minefield cannot be null");
-    return minefield->isGameOver;
+    return minefield->state == MINESWEEPER_STATE_LOST;
 }
 
 bool minefieldIsWin(const Minefield *minefield) {
     assert(minefield != NULL && "Minefield cannot be null");
-    return minefield->isGameWon;
+    return minefield->state == MINESWEEPER_STATE_WON;
 }
 
-SDL_Point minefieldGetExplosionPoint(const Minefield *minefield) {
+MS_Point minefieldGetExplosionPoint(const Minefield *minefield) {
     assert(minefield != NULL && "Minefield cannot be null");
     return minefield->explosionPos;
 }
